@@ -108,9 +108,15 @@ yourself, call `Lampa.Favorite.read()` (or `init()` on old builds).
 2. **Logic in Node, no TV**: `lampa-fake.js` in this folder installs a recording fake `Lampa`, `XMLHttpRequest`, `window` and
    `document`; `example-test.js` drives `free-my-tv.js` with it (payload shape, debounce, retry). Copy and adapt:
    `node skills/lampa-plugin/example-test.js`.
-3. **In a browser**: clone `yumata/lampa-source`, `npm install && npm run start` (<http://localhost:3000>), add your plugin
-   URL under *Settings → Extensions* (use a local static server, or Pages). `npm run debug` adds source maps. A `debugger`
-   statement pauses even inside the compiled script.
+3. **In a real Lampa, in a browser** (verified; no build needed): open `https://cf.lampa.mx` in Chromium (`lampa.mx` itself
+   fails TLS in some Chromium builds). First run shows a language wizard: press Enter, then wait for `window.appready`
+   (it first shows "Loading plugins"). Seed state with `Lampa.Storage.set('favorite', {...}); Lampa.Favorite.read();`,
+   inject the plugin with a `<script>` whose `textContent` is the file, then drive it
+   (`Lampa.Activity.push({component: ...})`). Mock any external API with request interception (answer the CORS `OPTIONS`
+   preflight with 204 and `access-control-allow-origin/headers`, then the real reply); evaluate in the page world, not
+   an isolated one. Alternatively clone `yumata/lampa-source`, `npm install && npm run start` (<http://localhost:3000>)
+   and add your URL under *Settings → Extensions*; `npm run debug` adds source maps, and a `debugger` statement pauses
+   inside the script.
 4. **On the TV**: the release Lampa WebView is not debuggable. Prove behaviour from outside:
    - to see whether a request leaves the plugin, run a stand-in server on the TV through adb, for example
      `adb shell "printf 'HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: 0\r\n\r\n' | nc -l -p 38777 > /data/local/tmp/req.txt"`,
