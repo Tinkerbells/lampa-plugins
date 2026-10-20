@@ -89,4 +89,5 @@ OpenAI-совместимый сервис), с постерами и причи
 `https://tinkerbells.github.io/lampa-plugins/ai-recommendations.js`. Нужен ваш собственный API-ключ (вводится в
 *Настройки → AI рекомендации*); модели уходят только названия, годы и названия списков. Доступность провайдера зависит от
 региона: проверьте условия вашего провайдера.
+
 Написан по образцу [levende/lampa-plugins](https://github.com/levende/lampa-plugins) и [nb557/plugins](https://github.com/nb557/plugins).
