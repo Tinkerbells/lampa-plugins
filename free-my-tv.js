@@ -261,7 +261,7 @@
         });
 
         if (Lampa.Favorite && Lampa.Favorite.listener && typeof Lampa.Favorite.listener.follow === 'function') {
-            Lampa.Favorite.listener.follow('add,added,remove,removed', schedule);
+            Lampa.Favorite.listener.follow('add,added,remove', schedule);
         }
 
         // Back in Lampa from another app: the home screen may have been restarted meanwhile.

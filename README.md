@@ -41,6 +41,21 @@ the order Lampa shows them. Movies and shows are numbered separately on TMDB, so
 To open a title in Lampa from another app:
 `am start -n top.rootu.lampa/.MainActivity --es id <id> --es media <movie|tv> --es source tmdb`.
 
+## Writing a plugin: the `lampa-plugin` skill
+
+[`skills/lampa-plugin`](skills/lampa-plugin/SKILL.md) is a skill for AI coding agents (Claude Code and compatible) that
+knows how to write, test, debug and publish a Lampa plugin: the ES5 and guard rules for old TV WebViews, the `Lampa.*`
+API you actually need, the user's lists, talking to a local app from a plugin, Android-specific tricks, hosting on
+GitHub Pages, and an on-TV debugging recipe. It also ships a Node test stand-in (`lampa-fake.js`, `example-test.js`).
+
+Use it in this repository as it is (`.claude/skills/lampa-plugin` points to it), or install it for every project:
+
+```
+cp -R skills/lampa-plugin ~/.claude/skills/
+```
+
+Run the example test: `node skills/lampa-plugin/example-test.js`.
+
 ## По-русски
 
 Плагин отправляет ваши списки Lampa («Позже», «Закладки», «История» и др.) на главный экран Free My TV на этом же
