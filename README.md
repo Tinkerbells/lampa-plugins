@@ -62,6 +62,25 @@ from **AI recommendations** in the menu.
 - **Availability:** providers are not available everywhere. Anthropic's API is only offered in the countries on its
   [supported list](https://www.anthropic.com/supported-countries); check your provider's terms for where you are.
 
+## Torrent season jump
+
+On a series' torrent list Lampa shows a plaque with the last thing you opened ("Torrent • Season 21 • Episode 3"). It is
+only a label: pressing OK on it does nothing, and the built-in *Filter → Season* reads release titles strictly, so it can
+miss seasons. This plugin makes the plaque a button: **OK on it lists every release of that season** and opens the one
+you pick.
+
+**Install:** *Settings → Extensions → Add plugin*, `https://tinkerbells.github.io/lampa-plugins/torrent-season-jump.js`,
+restart Lampa. The plaque then shows *OK: releases of season N*.
+
+- **Which season:** the one Lampa saved when you last opened a file of this series (`online_watched_last`).
+- **How releases are found:** from the titles in the current search results, not from the built-in filter: `21 сезон`,
+  `21-й сезон`, `сезон 21`, `Season 21`, `S21`, `S21E03`, `21x03`, and packs such as `1-25 сезон`, `S01-S25`, `Сезоны 1-24`
+  (shown last, labelled *Pack 1-25*). Episode ranges (`сезон: 1-12 серии`) and years are not mistaken for seasons. Most
+  seeded first inside each group.
+- **Needs** the torrent list to have been loaded in this session (the plugin reads the results of the search the list
+  just made); otherwise it asks you to reopen the list.
+- Changes nothing else in the list; Back closes the picker.
+
 ## Writing a plugin: the `lampa-plugin` skill
 
 [`skills/lampa-plugin`](skills/lampa-plugin/SKILL.md) is a skill for AI coding agents (Claude Code and compatible) that
@@ -89,5 +108,9 @@ OpenAI-совместимый сервис), с постерами и причи
 `https://tinkerbells.github.io/lampa-plugins/ai-recommendations.js`. Нужен ваш собственный API-ключ (вводится в
 *Настройки → AI рекомендации*); модели уходят только названия, годы и названия списков. Доступность провайдера зависит от
 региона: проверьте условия вашего провайдера.
+
+Плагин `torrent-season-jump.js` делает плашку «Torrent • Сезон 21 • Серия 3» на экране торрентов кнопкой: OK на ней показывает
+все раздачи этого сезона (одиночные и паки «1-25 сезон»), даже если встроенный фильтр «Сезон» их не видит. Адрес:
+`https://tinkerbells.github.io/lampa-plugins/torrent-season-jump.js`.
 
 Написан по образцу [levende/lampa-plugins](https://github.com/levende/lampa-plugins) и [nb557/plugins](https://github.com/nb557/plugins).
