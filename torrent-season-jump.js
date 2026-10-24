@@ -75,25 +75,62 @@
         return null;
     }
 
-    // The season's own releases first, then packs that include it; most seeded first inside each group.
-    function findReleases(results, season) {
-        var own = [];
-        var packs = [];
+    // ----------------------------------------------------------------------------- what you opened before
+
+    // Lampa itself remembers every release you opened (`torrents_view`, shown as `element.viewed` in the results).
+    // On top of that the plugin keeps the last release it saw you open for each series.
+    var LAST_KEY = 'season_jump_last';
+
+    function lastOpened(movie) {
+        var all = Lampa.Storage.get(LAST_KEY, '{}') || {};
+        return (movie && all[movie.id]) || null;
+    }
+
+    function rememberOpened(movie, element) {
+        if (!movie || !element || !element.hash) return;
+
+        var all = Lampa.Storage.get(LAST_KEY, '{}') || {};
+        all[movie.id] = {hash: element.hash, title: String(element.Title || '').substring(0, 160)};
+        Lampa.Storage.set(LAST_KEY, all);
+    }
+
+    // Same bookkeeping as the list's own "mark as viewed".
+    function markViewed(element) {
+        if (!element || !element.hash) return;
+
+        var viewed = Lampa.Storage.cache('torrents_view', 5000, []);
+        if (viewed.indexOf(element.hash) === -1) {
+            viewed.push(element.hash);
+            Lampa.Storage.set('torrents_view', viewed);
+        }
+        element.viewed = true;
+    }
+
+    // What you opened before first (the last one, then the others), then the season's own releases, then packs that
+    // include it; most seeded first inside each group.
+    function findReleases(results, season, movie) {
+        var items = [];
+        var last = lastOpened(movie);
         var i;
 
         for (i = 0; i < results.length; i++) {
             var hit = results[i] && matchSeason(results[i].Title, season);
             if (!hit) continue;
-            (hit.pack ? packs : own).push({element: results[i], hit: hit});
+            items.push({
+                element: results[i],
+                hit: hit,
+                last: !!(last && results[i].hash && results[i].hash === last.hash),
+                viewed: !!results[i].viewed
+            });
         }
 
-        function bySeeds(a, b) {
-            return (b.element.Seeders || 0) - (a.element.Seeders || 0);
-        }
-
-        own.sort(bySeeds);
-        packs.sort(bySeeds);
-        return own.concat(packs);
+        items.sort(function (a, b) {
+            return (b.last - a.last)
+                || (b.viewed - a.viewed)
+                || (a.hit.pack - b.hit.pack)
+                || ((b.element.Seeders || 0) - (a.element.Seeders || 0));
+        });
+        return items;
     }
 
     // ------------------------------------------------------------------------------------- what you watched last
@@ -129,6 +166,8 @@
         var parts = [];
 
         parts.push(item.hit.pack ? say('season_jump_pack', {from: item.hit.from, to: item.hit.to}) : Lampa.Lang.translate('season_jump_season'));
+        if (item.last) parts.unshift('★ ' + Lampa.Lang.translate('season_jump_last'));
+        else if (item.viewed) parts.unshift('✓ ' + Lampa.Lang.translate('season_jump_viewed'));
         if (element.Tracker) parts.push(plain(element.Tracker));
         if (element.size) parts.push(plain(element.size));
         parts.push('▲ ' + (element.Seeders || 0));
@@ -139,6 +178,8 @@
         element.poster = movie.img;
         // The list sets its own "mark as viewed" callback on each open; a stale one would mark the wrong row.
         Lampa.Torrent.opened(function () {});
+        markViewed(element);
+        rememberOpened(movie, element);
         Lampa.Torrent.start(element, movie);
     }
 
@@ -153,15 +194,15 @@
         var season = watchedSeason(movie);
         if (!season) return Lampa.Noty.show(Lampa.Lang.translate('season_jump_nosaved'));
 
-        var items = findReleases(last.data.Results || [], season);
+        var items = findReleases(last.data.Results || [], season, movie);
         if (!items.length) return Lampa.Noty.show(say('season_jump_none', {season: season}));
 
         var controller = Lampa.Controller.enabled().name;
 
         Lampa.Select.show({
             title: say('season_jump_title', {season: season, count: items.length}),
-            items: items.map(function (item) {
-                return {title: plain(item.element.Title), subtitle: subtitleOf(item), release: item};
+            items: items.map(function (item, index) {
+                return {title: plain(item.element.Title), subtitle: subtitleOf(item), release: item, selected: index === 0};
             }),
             onBack: function () {
                 Lampa.Controller.toggle(controller);
@@ -195,6 +236,8 @@
             season_jump_hint: {en: 'OK: releases of season {season}', ru: 'OK: раздачи {season} сезона', uk: 'OK: роздачі {season} сезону'},
             season_jump_title: {en: 'Season {season}: {count} found', ru: 'Сезон {season}: найдено {count}', uk: 'Сезон {season}: знайдено {count}'},
             season_jump_season: {en: 'Season', ru: 'Сезон', uk: 'Сезон'},
+            season_jump_last: {en: 'Last opened', ru: 'Открывали последней', uk: 'Відкривали останньою'},
+            season_jump_viewed: {en: 'Opened before', ru: 'Открывали раньше', uk: 'Відкривали раніше'},
             season_jump_pack: {en: 'Pack {from}-{to}', ru: 'Пак {from}-{to}', uk: 'Пак {from}-{to}'},
             season_jump_none: {
                 en: 'No releases of season {season} in these results',
@@ -241,6 +284,8 @@
         // later, once for the whole batch.
         var binding = null;
         Lampa.Listener.follow('torrent', function (event) {
+            // A release opened from the normal list is remembered too, so the plaque jumps back to it next time.
+            if (event.type === 'onenter' && last) rememberOpened(last.movie, event.element);
             if (event.type !== 'render') return;
             clearTimeout(binding);
             binding = setTimeout(bindPlaque, 50);

@@ -75,8 +75,10 @@ restart Lampa. The plaque then shows *OK: releases of season N*.
 - **Which season:** the one Lampa saved when you last opened a file of this series (`online_watched_last`).
 - **How releases are found:** from the titles in the current search results, not from the built-in filter: `21 сезон`,
   `21-й сезон`, `сезон 21`, `Season 21`, `S21`, `S21E03`, `21x03`, and packs such as `1-25 сезон`, `S01-S25`, `Сезоны 1-24`
-  (shown last, labelled *Pack 1-25*). Episode ranges (`сезон: 1-12 серии`) and years are not mistaken for seasons. Most
-  seeded first inside each group.
+  (shown last, labelled *Pack 1-25*). Episode ranges (`сезон: 1-12 серии`) and years are not mistaken for seasons.
+- **Order:** the release you opened last (★), then ones Lampa already knew you opened (✓, from its own viewed list, so
+  your history from before the plugin counts), then the rest: the season's own releases before packs, most seeded first.
+  The first row is focused. Releases opened through the picker or the normal list are remembered per series.
 - **Needs** the torrent list to have been loaded in this session (the plugin reads the results of the search the list
   just made); otherwise it asks you to reopen the list.
 - Changes nothing else in the list; Back closes the picker.
