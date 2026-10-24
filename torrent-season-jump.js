@@ -47,7 +47,8 @@
 
         var singlePatterns = [
             /(\d{1,2})\s*(?:-?(?:й|ой))?\s*(?:сезон|season|сез(?![а-я]))/g,
-            /(?:сезон|season)\s*[:№#]?\s*(\d{1,2})(?!\d)/g,
+            // not followed by "-12": after "сезон:" that is an episode range ("21 сезон: 1-12 серии")
+            /(?:сезон|season)\s*[:№#]?\s*(\d{1,2})(?!\d)(?!\s*[-–—]\s*\d)/g,
             /(?:^|[^a-z0-9])s(\d{1,2})(?:e\d|[^a-z0-9]|$)/g,
             /(?:^|[^\d])(\d{1,2})x\d{1,3}/g
         ];
@@ -77,20 +78,43 @@
 
     // ----------------------------------------------------------------------------- what you opened before
 
-    // Lampa itself remembers every release you opened (`torrents_view`, shown as `element.viewed` in the results).
-    // On top of that the plugin keeps the last release it saw you open for each series.
+    // Lampa itself remembers only a hash for every release you opened (`torrents_view`, shown as `element.viewed` in
+    // the results), and a release's title changes when episodes are added, so the hash soon matches nothing. The plugin
+    // keeps, for each series, the last few releases it saw you open together with what is needed to open them again
+    // (magnet or link), so they can be offered even when today's search no longer lists them.
     var LAST_KEY = 'season_jump_last';
+    var KEEP = 8;
+    var SNAPSHOT = ['Title', 'MagnetUri', 'Link', 'Tracker', 'Size', 'size', 'Seeders', 'Peers', 'PublishDate', 'PublisTime', 'hash', 'Details', 'info'];
+
+    // Newest first. The first version of the plugin kept one entry per series; it has no snapshot and is read as a list.
+    function openedBefore(movie) {
+        var all = Lampa.Storage.get(LAST_KEY, '{}') || {};
+        var list = movie ? all[movie.id] : null;
+
+        if (!list) return [];
+        return typeof list.length === 'number' ? list : [list];
+    }
 
     function lastOpened(movie) {
-        var all = Lampa.Storage.get(LAST_KEY, '{}') || {};
-        return (movie && all[movie.id]) || null;
+        return openedBefore(movie)[0] || null;
     }
 
     function rememberOpened(movie, element) {
         if (!movie || !element || !element.hash) return;
 
         var all = Lampa.Storage.get(LAST_KEY, '{}') || {};
-        all[movie.id] = {hash: element.hash, title: String(element.Title || '').substring(0, 160)};
+        var list = openedBefore(movie).filter(function (entry) {
+            return entry.hash !== element.hash;
+        });
+        var release = {};
+        var i;
+
+        for (i = 0; i < SNAPSHOT.length; i++) {
+            if (element[SNAPSHOT[i]] !== undefined) release[SNAPSHOT[i]] = element[SNAPSHOT[i]];
+        }
+
+        list.unshift({hash: element.hash, title: String(element.Title || '').substring(0, 160), at: new Date().getTime(), release: release});
+        all[movie.id] = list.slice(0, KEEP);
         Lampa.Storage.set(LAST_KEY, all);
     }
 
@@ -214,15 +238,105 @@
         });
     }
 
-    // The plaque is rebuilt with the list (filter, sort), so it is bound again on every row render.
+    // A short label for a release's season: "S21", "S1-25", or empty when the title names none.
+    function seasonTag(title) {
+        var seasons = seasonsIn(title);
+
+        if (seasons.single.length) return 'S' + seasons.single.join(',');
+        if (seasons.ranges.length) return 'S' + seasons.ranges[0][0] + '-' + seasons.ranges[0][1];
+        return '';
+    }
+
+    // What to show above the list: releases you opened before (the plugin's own record, newest first, then ones Lampa
+    // knows as viewed in today's results), so a release is offered even if today's search no longer returns it.
+    function watchedRows(movie) {
+        var results = (last && last.data && last.data.Results) || [];
+        var byHash = {};
+        var seen = {};
+        var rows = [];
+        var i;
+
+        for (i = 0; i < results.length; i++) if (results[i] && results[i].hash) byHash[results[i].hash] = results[i];
+
+        var before = openedBefore(movie);
+        for (i = 0; i < before.length; i++) {
+            var element = byHash[before[i].hash] || before[i].release;
+            if (!element || !element.Title) continue;
+            seen[before[i].hash] = true;
+            rows.push({element: element, last: rows.length === 0});
+        }
+
+        var viewed = results.filter(function (item) {
+            return item && item.viewed && !seen[item.hash];
+        }).sort(function (a, b) {
+            return (b.Seeders || 0) - (a.Seeders || 0);
+        });
+        for (i = 0; i < viewed.length; i++) rows.push({element: viewed[i], last: false});
+
+        return rows.slice(0, 6);
+    }
+
+    function renderWatched(plaque, movie) {
+        $('.season-jump-watched').remove();
+
+        var rows = watchedRows(movie);
+        if (!rows.length) return;
+
+        var block = $('<div class="season-jump-watched"><div class="season-jump-watched__title"></div></div>');
+        var nodes = [];
+
+        block.find('.season-jump-watched__title').text(Lampa.Lang.translate('season_jump_watched'));
+
+        rows.forEach(function (row) {
+            var element = row.element;
+            var node = $('<div class="season-jump-row selector"><div class="season-jump-row__tag"></div>'
+                + '<div class="season-jump-row__body"><div class="season-jump-row__title"></div><div class="season-jump-row__meta"></div></div></div>');
+            var meta = [];
+
+            if (row.last) meta.push('★ ' + Lampa.Lang.translate('season_jump_last'));
+            if (element.Tracker) meta.push(plain(element.Tracker));
+            if (element.size) meta.push(plain(element.size));
+
+            node.find('.season-jump-row__tag').text(seasonTag(element.Title) || '▶');
+            node.find('.season-jump-row__title').text(plain(element.Title));
+            node.find('.season-jump-row__meta').text(meta.join(' · '));
+            node.on('hover:enter', function () {
+                openRelease(element, movie);
+            });
+
+            block.append(node);
+            nodes.push(node[0]);
+        });
+
+        plaque.before(block);
+        Lampa.Controller.collectionAppend($(nodes));
+    }
+
+    // History: a series you opened a release of goes straight to that release.
+    function openFromHistory(card) {
+        var active = Lampa.Activity.active() || {};
+
+        if (active.component !== 'favorite' || active.type !== 'history') return false;
+        if (String(Lampa.Storage.field('season_jump_history')) === 'false') return false;
+
+        var entry = lastOpened(card);
+        if (!entry || !entry.release || !entry.release.Title) return false;
+
+        openRelease(entry.release, card);
+        return true;
+    }
+
+    // The list is rebuilt on filter and sort, so this runs again each time.
     function bindPlaque() {
         var plaque = $('.watched-history');
         if (!plaque.length) return;
 
-        var season = last ? watchedSeason(last.movie) : 0;
+        var movie = last && last.movie;
+        var season = movie ? watchedSeason(movie) : 0;
 
         plaque.off('hover:enter.season_jump');
         plaque.find('.season-jump-hint').remove();
+        if (movie) renderWatched(plaque, movie);
         if (!season) return;
 
         plaque.on('hover:enter.season_jump', jump);
@@ -239,6 +353,18 @@
             season_jump_last: {en: 'Last opened', ru: 'Открывали последней', uk: 'Відкривали останньою'},
             season_jump_viewed: {en: 'Opened before', ru: 'Открывали раньше', uk: 'Відкривали раніше'},
             season_jump_pack: {en: 'Pack {from}-{to}', ru: 'Пак {from}-{to}', uk: 'Пак {from}-{to}'},
+            season_jump_watched: {en: 'You watched', ru: 'Вы смотрели', uk: 'Ви дивилися'},
+            season_jump_settings: {en: 'Torrents: seasons', ru: 'Торренты: сезоны', uk: 'Торенти: сезони'},
+            season_jump_history: {
+                en: 'History opens the release',
+                ru: 'История открывает раздачу',
+                uk: 'Історія відкриває роздачу'
+            },
+            season_jump_history_descr: {
+                en: 'OK on a series in History opens the release you watched last, without the card. Off: always the card',
+                ru: 'OK на сериале в Истории сразу открывает раздачу, которую вы смотрели, минуя карточку. Выключено: всегда карточка',
+                uk: 'OK на серіалі в Історії одразу відкриває роздачу, яку ви дивилися, оминаючи картку. Вимкнено: завжди картка'
+            },
             season_jump_none: {
                 en: 'No releases of season {season} in these results',
                 ru: 'Раздач {season} сезона в этих результатах нет',
@@ -261,7 +387,32 @@
         $('body').append('<style>'
             + '.watched-history{align-items:center}'
             + '.season-jump-hint{margin-left:auto;padding-left:1.5em;opacity:.6;white-space:nowrap;font-size:.9em}'
+            + '.season-jump-watched{margin-bottom:1em}'
+            + '.season-jump-watched__title{opacity:.6;font-size:.9em;margin:0 0 .5em .3em}'
+            + '.season-jump-row{position:relative;display:flex;align-items:center;border-radius:.3em;background-color:rgba(0,0,0,.3);padding:.8em 1em;margin-bottom:.5em}'
+            + '.season-jump-row__tag{flex-shrink:0;min-width:3.2em;margin-right:1em;padding:.3em .5em;border-radius:.3em;background:rgba(255,255,255,.12);text-align:center;font-weight:600}'
+            + '.season-jump-row__body{min-width:0}'
+            + '.season-jump-row__title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+            + '.season-jump-row__meta{opacity:.6;font-size:.85em;margin-top:.2em}'
+            + '.season-jump-row.focus::after{content:"";position:absolute;top:-.3em;left:-.3em;right:-.3em;bottom:-.3em;border:.3em solid #fff;border-radius:.6em}'
             + '</style>');
+    }
+
+    function addSettings() {
+        Lampa.SettingsApi.addComponent({
+            component: 'season_jump',
+            name: Lampa.Lang.translate('season_jump_settings'),
+            icon: '<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/></svg>'
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: 'season_jump',
+            param: {name: 'season_jump_history', type: 'trigger', default: true},
+            field: {
+                name: Lampa.Lang.translate('season_jump_history'),
+                description: Lampa.Lang.translate('season_jump_history_descr')
+            }
+        });
     }
 
     function start() {
@@ -290,6 +441,15 @@
             clearTimeout(binding);
             binding = setTimeout(bindPlaque, 50);
         });
+
+        // History list: OK on a series you watched through a release opens that release straight away, without the card.
+        var originalCall = Lampa.Router.call;
+        Lampa.Router.call = function (name, data) {
+            if (name === 'full' && data && openFromHistory(data)) return;
+            return originalCall.apply(Lampa.Router, arguments);
+        };
+
+        addSettings();
     }
 
     if (window.appready) {

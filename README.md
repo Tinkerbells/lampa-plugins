@@ -81,7 +81,15 @@ restart Lampa. The plaque then shows *OK: releases of season N*.
   The first row is focused. Releases opened through the picker or the normal list are remembered per series.
 - **Needs** the torrent list to have been loaded in this session (the plugin reads the results of the search the list
   just made); otherwise it asks you to reopen the list.
-- Changes nothing else in the list; Back closes the picker.
+- **"You watched" block:** above the list (over the plaque) the releases you opened before, so one OK takes you
+  back to them. Two sources: the plugin's own record per series (the last 8 releases, newest first, kept with their
+  magnet/link, so a release is offered even if today's search no longer returns it: Lampa only keeps a hash, and a
+  release's title changes when episodes are added), and releases Lampa marks as viewed in today's results (so history
+  from before the plugin shows up, but only while the search returns them).
+- **History list:** OK on a series in *History* opens the release you opened last straight away, without the card and
+  the season choice. Series with no recorded release open the card as usual. Turn it off in *Settings → Torrents:
+  seasons → History opens the release*.
+- Back closes the picker.
 
 ## Writing a plugin: the `lampa-plugin` skill
 
